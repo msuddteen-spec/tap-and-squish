@@ -112,6 +112,13 @@ export class Game {
     this.toastTime = Math.max(0, this.toastTime - dt);
     this.flash = Math.max(0, this.flash - dt * 2.4);
 
+    if (this.input.pressed.length > 0) {
+      for (const pressed of this.input.pressed) {
+        this.handleSquish(this.pressImpulse(pressed));
+      }
+      this.input.clearPressed();
+    }
+
     while (this.accumulator >= this.fixedStep) {
       this.pointerBuffer.length = 0;
       for (const pointer of this.input.active.values()) {
@@ -247,6 +254,17 @@ export class Game {
     }
     const falloff = 1 - dist / radius;
     return clamp(globalCompression * (0.45 + falloff * 0.85), 0, 1);
+  }
+
+  private pressImpulse(pointer: PointerContact): number {
+    const center = this.blob.points[0];
+    const dx = pointer.x - center.x;
+    const dy = pointer.y - center.y;
+    const dist = Math.hypot(dx, dy);
+    const radius = this.blob.baseRadius * 1.45;
+    const proximity = dist >= radius ? 0 : 1 - dist / radius;
+    const pressure = clamp(pointer.pressure, 0.25, 1);
+    return clamp(0.22 + proximity * 0.34 + pressure * 0.16, 0.18, 0.92);
   }
 }
 

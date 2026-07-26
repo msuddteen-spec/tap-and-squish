@@ -14,6 +14,7 @@ export interface ReleasedPointer extends PointerContact {
 
 export class InputManager {
   readonly active = new Map<number, PointerContact>();
+  readonly pressed: PointerContact[] = [];
   readonly released: ReleasedPointer[] = [];
 
   private readonly canvas: HTMLCanvasElement;
@@ -28,6 +29,10 @@ export class InputManager {
     this.released.length = 0;
   }
 
+  clearPressed(): void {
+    this.pressed.length = 0;
+  }
+
   private bind(): void {
     const toLocal = (event: PointerEvent): { x: number; y: number } => {
       const rect = this.canvas.getBoundingClientRect();
@@ -40,7 +45,7 @@ export class InputManager {
     this.canvas.addEventListener("pointerdown", (event) => {
       this.canvas.setPointerCapture(event.pointerId);
       const local = toLocal(event);
-      this.active.set(event.pointerId, {
+      const contact: PointerContact = {
         id: event.pointerId,
         x: local.x,
         y: local.y,
@@ -48,7 +53,9 @@ export class InputManager {
         prevY: local.y,
         pressure: event.pressure > 0 ? event.pressure : 0.5,
         peakCompression: 0
-      });
+      };
+      this.active.set(event.pointerId, contact);
+      this.pressed.push({ ...contact });
     });
 
     this.canvas.addEventListener("pointermove", (event) => {
