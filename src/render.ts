@@ -11,6 +11,7 @@ export interface FrameStats {
   toastText: string;
   toastTime: number;
   flash: number;
+  pendingGachaOpen: boolean;
 }
 
 interface SplinePoint {
@@ -82,6 +83,51 @@ function drawLabel(
   return width;
 }
 
+function drawFace(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, happy: number): void {
+  const eyeY = cy - radius * 0.05;
+  const eyeOffset = radius * 0.25;
+  const eyeSize = Math.max(2.2, radius * 0.055);
+  ctx.save();
+  ctx.fillStyle = "rgba(55, 35, 48, 0.8)";
+  ctx.beginPath();
+  ctx.arc(cx - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+  ctx.arc(cx + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(55, 35, 48, 0.78)";
+  ctx.lineWidth = Math.max(2, radius * 0.035);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(cx, cy + radius * 0.08, radius * (0.17 + happy * 0.05), 0.16 * Math.PI, 0.84 * Math.PI);
+  ctx.stroke();
+  ctx.fillStyle = `rgba(255, 112, 131, ${0.16 + happy * 0.18})`;
+  ctx.beginPath();
+  ctx.ellipse(cx - radius * 0.39, cy + radius * 0.12, radius * 0.11, radius * 0.055, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx + radius * 0.39, cy + radius * 0.12, radius * 0.11, radius * 0.055, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawStageTrack(ctx: CanvasRenderingContext2D, width: number, y: number, active: number): void {
+  const labels = ["DOUGH", "BREAD", "CAKE", "SQUISHY"];
+  const left = 26;
+  const step = (width - 52) / (labels.length - 1);
+  ctx.save();
+  ctx.font = "700 9px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255, 173, 184, 0.28)";
+  ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(width - left, y); ctx.stroke();
+  labels.forEach((label, i) => {
+    const x = left + step * i;
+    ctx.fillStyle = i <= active ? "#ff7990" : "#d8c8c2";
+    ctx.beginPath(); ctx.arc(x, y, i === active ? 7 : 5, 0, Math.PI * 2); ctx.fill();
+    if (i === active) { ctx.fillStyle = "#fff8f4"; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = i <= active ? "#7b5360" : "#b7aaa7";
+    ctx.fillText(label, x, y + 22);
+  });
+  ctx.restore();
+}
+
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -92,14 +138,14 @@ export function renderFrame(
   ctx.clearRect(0, 0, width, height);
 
   const bg = ctx.createLinearGradient(0, 0, 0, height);
-  bg.addColorStop(0, "#07111d");
-  bg.addColorStop(0.45, "#0b1627");
-  bg.addColorStop(1, "#050b12");
+  bg.addColorStop(0, "#fff8f3");
+  bg.addColorStop(0.65, "#fff1ed");
+  bg.addColorStop(1, "#f8e5e3");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
   const topWash = ctx.createRadialGradient(width * 0.5, height * 0.22, 10, width * 0.5, height * 0.22, Math.max(width, height) * 0.8);
-  topWash.addColorStop(0, "rgba(255,255,255,0.06)");
+  topWash.addColorStop(0, "rgba(255,255,255,0.62)");
   topWash.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = topWash;
   ctx.fillRect(0, 0, width, height);
@@ -118,6 +164,14 @@ export function renderFrame(
   const cx = blob.points[0].x;
   const cy = blob.points[0].y;
   const radius = blob.baseRadius;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(188, 105, 115, 0.13)";
+  ctx.filter = "blur(12px)";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + radius * 0.93, radius * 0.85, radius * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
   ctx.save();
   ctx.shadowColor = "rgba(0, 0, 0, 0.36)";
@@ -169,30 +223,29 @@ export function renderFrame(
   ctx.stroke();
   ctx.restore();
 
+  drawFace(ctx, cx, cy, radius, clamp(blob.jiggle * 1.4, 0, 1));
+
   const progress = clamp(stats.stageProgress, 0, 1);
-  const barWidth = Math.min(240, width - 36);
+  const barWidth = Math.min(310, width - 52);
   const barX = (width - barWidth) * 0.5;
-  const barY = Math.max(18, height - 26);
+  const barY = cy + radius + 38;
 
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
-  ctx.fillRect(barX, barY, barWidth, 6);
-  ctx.fillStyle = blob.palette.light;
-  ctx.fillRect(barX, barY, barWidth * progress, 6);
+  ctx.fillStyle = "rgba(255,255,255,0.78)";
+  roundedRectPath(ctx, barX, barY, barWidth, 12, 6); ctx.fill();
+  ctx.fillStyle = "#ff8b9b";
+  roundedRectPath(ctx, barX, barY, Math.max(12, barWidth * progress), 12, 6); ctx.fill();
+  drawStageTrack(ctx, width, 100, ["Dough", "Bread", "Cake", "Squishy"].indexOf(stats.stageName));
 
-  const topY = 16;
-  const leftWidth = drawLabel(
-    ctx,
-    16,
-    topY,
-    `${stats.stageName} ${Math.round(progress * 100)}%`,
-    "rgba(239, 245, 255, 0.96)"
-  );
-  drawLabel(ctx, 24 + leftWidth, topY, `Squishes ${stats.squishes}`, "rgba(218, 228, 245, 0.9)");
+  ctx.fillStyle = "#6d4c56";
+  ctx.font = "800 13px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`${stats.stageName}  ·  ${Math.round(progress * 100)}%`, width * 0.5, barY + 29);
 
-  const rightText = stats.gachaTickets > 0 ? `Gacha ${stats.gachaTickets}` : "Gacha 0";
-  ctx.font = "600 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  const rightWidth = Math.ceil(ctx.measureText(rightText).width) + 18;
-  drawLabel(ctx, width - rightWidth - 16, topY, rightText, "rgba(255, 233, 196, 0.96)", "rgba(255, 218, 153, 0.18)");
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#7b5960"; ctx.font = "800 17px system-ui, sans-serif"; ctx.fillText("Tap & Squish", 22, 38);
+  ctx.fillStyle = "#bd9296"; ctx.font = "600 10px system-ui, sans-serif"; ctx.fillText("MAKE IT SMILE", 23, 54);
+  ctx.textAlign = "right"; ctx.fillStyle = "#7b5960"; ctx.font = "800 13px system-ui, sans-serif"; ctx.fillText(`✦ ${stats.squishes}`, width - 22, 37);
+  ctx.fillStyle = "#b27c86"; ctx.font = "700 10px system-ui, sans-serif"; ctx.fillText("SQUISHES", width - 22, 53);
 
   ctx.font = "600 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
   drawLabel(
@@ -210,8 +263,8 @@ export function renderFrame(
     const toastY = Math.max(44, height - 92);
     ctx.save();
     ctx.globalAlpha = clamp(stats.toastTime, 0, 1);
-    ctx.fillStyle = "rgba(6, 10, 16, 0.55)";
-    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.fillStyle = "rgba(126, 70, 83, 0.82)";
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
     ctx.lineWidth = 1;
     roundedRectPath(ctx, toastX, toastY, toastWidth, 28, 14);
     ctx.fill();
@@ -221,6 +274,18 @@ export function renderFrame(
     ctx.fillText(stats.toastText, toastX + 12, toastY + 18);
     ctx.restore();
   }
+
+  ctx.save();
+  const cardY = height - 92;
+  roundedRectPath(ctx, 18, cardY, width - 36, 58, 18);
+  ctx.fillStyle = stats.pendingGachaOpen ? "#ff8a9a" : "rgba(255,255,255,0.66)"; ctx.fill();
+  ctx.strokeStyle = stats.pendingGachaOpen ? "rgba(255,255,255,0.55)" : "rgba(177,126,130,0.18)"; ctx.stroke();
+  ctx.textAlign = "left"; ctx.fillStyle = stats.pendingGachaOpen ? "#fff8f4" : "#8a656c"; ctx.font = "800 13px system-ui, sans-serif";
+  ctx.fillText(stats.pendingGachaOpen ? "✨ Your Squishy is ready!" : "Complete the bar to unlock a Squishy", 36, cardY + 24);
+  ctx.font = "600 11px system-ui, sans-serif"; ctx.fillStyle = stats.pendingGachaOpen ? "rgba(255,255,255,0.9)" : "#b08a8e";
+  ctx.fillText(stats.pendingGachaOpen ? "Tap to open your surprise" : "Tap the dough gently and watch it grow", 36, cardY + 42);
+  ctx.textAlign = "right"; ctx.font = "800 14px system-ui, sans-serif"; ctx.fillText(stats.pendingGachaOpen ? "OPEN ›" : `COLLECTION  ${stats.collectionCount}/${stats.collectionTotal}`, width - 34, cardY + 33);
+  ctx.restore();
 
   if (stats.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${stats.flash * 0.07})`;

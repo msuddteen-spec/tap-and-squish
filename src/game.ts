@@ -149,9 +149,7 @@ export class Game {
       this.input.clearReleased();
     }
 
-    if (this.pendingGachaOpen && this.input.active.size === 0) {
-      this.openGacha();
-    }
+    // The gacha remains visible until the player taps to open it.
   }
 
   private render(): void {
@@ -164,7 +162,8 @@ export class Game {
       collectionTotal: 10,
       toastText: this.toastText,
       toastTime: this.toastTime,
-      flash: this.flash
+      flash: this.flash,
+      pendingGachaOpen: this.pendingGachaOpen
     };
     renderFrame(this.ctx, this.width, this.height, this.blob, stats);
   }
@@ -223,6 +222,10 @@ export class Game {
   }
 
   private showPressFeedback(amount: number): void {
+    if (this.pendingGachaOpen) {
+      this.openGacha();
+      return;
+    }
     this.flash = Math.min(1, this.flash + 0.08 + amount * 0.08);
     this.toastText = "Squish!";
     this.toastTime = 0.45;
