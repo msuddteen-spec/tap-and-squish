@@ -180,8 +180,11 @@ export class Game {
     this.squishes += 1;
     this.flash = Math.min(1, this.flash + 0.14 + quality * 0.16);
 
-    const stageWeight = 0.2 + quality * 0.22;
-    this.stageProgress += stageWeight;
+    const stageWeight = 0.28 + quality * 0.34;
+    this.stageProgress = Math.min(1, this.stageProgress + stageWeight);
+    if (this.stageProgress >= 0.88) {
+      this.stageProgress = 1;
+    }
 
     if (this.stageIndex < EVOLUTION_STAGES.length - 1 && this.stageProgress >= 1) {
       this.stageProgress -= 1;
@@ -201,7 +204,7 @@ export class Game {
         this.toastTime = 1.2;
       }
     } else {
-      this.toastText = `${EVOLUTION_STAGES[this.stageIndex].name} ${Math.round(this.stageProgress * 100)}%`;
+      this.toastText = `${EVOLUTION_STAGES[this.stageIndex].name} ${Math.min(100, Math.round(this.stageProgress * 100))}%`;
       this.toastTime = 0.9;
     }
   }
