@@ -2,13 +2,15 @@ import type { SquishyBlob } from "./simulation";
 import { clamp } from "./math";
 
 export interface FrameStats {
-  score: number;
+  stageName: string;
+  stageProgress: number;
   squishes: number;
-  combo: number;
-  comboTime: number;
-  comboWindow: number;
+  gachaTickets: number;
+  collectionCount: number;
+  collectionTotal: number;
+  toastText: string;
+  toastTime: number;
   flash: number;
-  highScore: number;
 }
 
 interface SplinePoint {
@@ -22,19 +24,45 @@ function drawSpline(ctx: CanvasRenderingContext2D, points: readonly SplinePoint[
     return;
   }
   const get = (index: number): SplinePoint => points[(index + count) % count];
-  const first = get(0);
-  ctx.moveTo(first.x, first.y);
+  ctx.moveTo(get(0).x, get(0).y);
   for (let i = 0; i < count; i += 1) {
     const p0 = get(i - 1);
     const p1 = get(i);
     const p2 = get(i + 1);
     const p3 = get(i + 2);
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2.x, p2.y);
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y
+    );
   }
+}
+
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  text: string,
+  fill: string,
+  stroke = "rgba(255,255,255,0.08)"
+): number {
+  ctx.font = "600 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+  const width = Math.ceil(ctx.measureText(text).width) + 18;
+  ctx.save();
+  ctx.fillStyle = "rgba(6, 10, 16, 0.44)";
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, 24, 12);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x + 9, y + 16);
+  ctx.restore();
+  return width;
 }
 
 export function renderFrame(
@@ -46,18 +74,18 @@ export function renderFrame(
 ): void {
   ctx.clearRect(0, 0, width, height);
 
-  const background = ctx.createLinearGradient(0, 0, 0, height);
-  background.addColorStop(0, "#08111f");
-  background.addColorStop(0.55, "#101a2d");
-  background.addColorStop(1, "#06101a");
-  ctx.fillStyle = background;
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, "#07111d");
+  bg.addColorStop(0.45, "#0b1627");
+  bg.addColorStop(1, "#050b12");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  const floor = ctx.createLinearGradient(0, height * 0.72, 0, height);
-  floor.addColorStop(0, "rgba(69, 98, 140, 0)");
-  floor.addColorStop(1, "rgba(18, 30, 42, 0.55)");
-  ctx.fillStyle = floor;
-  ctx.fillRect(0, height * 0.72, width, height * 0.28);
+  const topWash = ctx.createRadialGradient(width * 0.5, height * 0.22, 10, width * 0.5, height * 0.22, Math.max(width, height) * 0.8);
+  topWash.addColorStop(0, "rgba(255,255,255,0.06)");
+  topWash.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = topWash;
+  ctx.fillRect(0, 0, width, height);
 
   const outerPoints: SplinePoint[] = [];
   const innerPoints: SplinePoint[] = [];
@@ -70,104 +98,116 @@ export function renderFrame(
     innerPoints.push({ x: point.x, y: point.y });
   }
 
-  const outerCenterX = blob.points[0].x;
-  const outerCenterY = blob.points[0].y;
-  const blobScale = clamp(blob.areaRatio, 0.62, 1.16);
-  const shadowAlpha = 0.34 + (1 - blobScale) * 0.14;
+  const cx = blob.points[0].x;
+  const cy = blob.points[0].y;
+  const radius = blob.baseRadius;
 
   ctx.save();
-  ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
-  ctx.shadowBlur = 26;
-  ctx.shadowOffsetY = 16;
-
+  ctx.shadowColor = "rgba(0, 0, 0, 0.36)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 18;
   ctx.beginPath();
   drawSpline(ctx, outerPoints);
   ctx.closePath();
 
-  const fill = ctx.createRadialGradient(
-    outerCenterX - blob.baseRadius * 0.36,
-    outerCenterY - blob.baseRadius * 0.42,
-    blob.baseRadius * 0.16,
-    outerCenterX,
-    outerCenterY,
-    blob.baseRadius * 1.25
+  const bodyFill = ctx.createRadialGradient(
+    cx - radius * 0.3,
+    cy - radius * 0.34,
+    radius * 0.1,
+    cx,
+    cy,
+    radius * 1.25
   );
-  fill.addColorStop(0, blob.palette.light);
-  fill.addColorStop(0.34, blob.palette.base);
-  fill.addColorStop(0.72, blob.palette.deep);
-  fill.addColorStop(1, "rgba(8, 10, 18, 0.06)");
-  ctx.fillStyle = fill;
+  bodyFill.addColorStop(0, blob.palette.light);
+  bodyFill.addColorStop(0.34, blob.palette.base);
+  bodyFill.addColorStop(0.76, blob.palette.deep);
+  bodyFill.addColorStop(1, "rgba(10, 12, 18, 0.08)");
+  ctx.fillStyle = bodyFill;
   ctx.fill();
 
   ctx.shadowColor = "transparent";
-  ctx.lineWidth = Math.max(1.4, blob.baseRadius * 0.018);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  ctx.lineWidth = Math.max(1.2, radius * 0.017);
   ctx.stroke();
 
-  const innerGlow = ctx.createRadialGradient(
-    outerCenterX - blob.baseRadius * 0.08,
-    outerCenterY - blob.baseRadius * 0.1,
-    blob.baseRadius * 0.08,
-    outerCenterX,
-    outerCenterY,
-    blob.baseRadius * 0.92
+  const shine = ctx.createRadialGradient(
+    cx - radius * 0.34,
+    cy - radius * 0.44,
+    radius * 0.04,
+    cx - radius * 0.1,
+    cy - radius * 0.18,
+    radius * 1.0
   );
-  innerGlow.addColorStop(0, "rgba(255, 255, 255, 0.28)");
-  innerGlow.addColorStop(0.48, "rgba(255, 255, 255, 0.06)");
-  innerGlow.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = innerGlow;
+  shine.addColorStop(0, "rgba(255,255,255,0.28)");
+  shine.addColorStop(0.42, "rgba(255,255,255,0.08)");
+  shine.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = shine;
   ctx.fill();
 
   ctx.beginPath();
   drawSpline(ctx, innerPoints);
   ctx.closePath();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-  ctx.lineWidth = Math.max(0.8, blob.baseRadius * 0.01);
+  ctx.strokeStyle = "rgba(255,255,255,0.1)";
+  ctx.lineWidth = Math.max(0.8, radius * 0.01);
   ctx.stroke();
   ctx.restore();
 
-  const rim = ctx.createLinearGradient(
-    outerCenterX - blob.baseRadius * 0.5,
-    outerCenterY - blob.baseRadius * 0.65,
-    outerCenterX + blob.baseRadius * 0.35,
-    outerCenterY + blob.baseRadius * 0.45
-  );
-  rim.addColorStop(0, blob.palette.glow);
-  rim.addColorStop(0.5, "rgba(255, 255, 255, 0)");
-  rim.addColorStop(1, blob.palette.accent);
-  ctx.fillStyle = rim;
-  ctx.beginPath();
-  drawSpline(ctx, outerPoints);
-  ctx.closePath();
-  ctx.globalCompositeOperation = "screen";
-  ctx.fill();
-  ctx.globalCompositeOperation = "source-over";
+  const progress = clamp(stats.stageProgress, 0, 1);
+  const barWidth = Math.min(240, width - 36);
+  const barX = (width - barWidth) * 0.5;
+  const barY = Math.max(18, height - 26);
 
-  const titleX = 18;
-  const titleY = 28;
-  ctx.fillStyle = "rgba(236, 243, 255, 0.92)";
-  ctx.font = "700 18px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  ctx.fillText("Tap & Squish", titleX, titleY);
-
-  ctx.font = "600 13px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  ctx.fillStyle = "rgba(208, 221, 240, 0.88)";
-  ctx.fillText(`Score ${stats.score.toLocaleString()}`, titleX, 52);
-  ctx.fillText(`Squishes ${stats.squishes}`, titleX + 118, 52);
-  ctx.fillText(`Combo x${Math.max(1, stats.combo)}`, titleX + 240, 52);
-
-  const comboWidth = 160;
-  const comboProgress = clamp(stats.comboTime / stats.comboWindow, 0, 1);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-  ctx.fillRect(titleX, 60, comboWidth, 6);
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fillRect(barX, barY, barWidth, 6);
   ctx.fillStyle = blob.palette.light;
-  ctx.fillRect(titleX, 60, comboWidth * comboProgress, 6);
+  ctx.fillRect(barX, barY, barWidth * progress, 6);
 
-  ctx.font = "500 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  ctx.fillStyle = "rgba(188, 199, 223, 0.84)";
-  ctx.fillText("Press, drag, and pinch with one or more fingers.", titleX, height - 18);
+  const topY = 16;
+  const leftWidth = drawLabel(
+    ctx,
+    16,
+    topY,
+    `${stats.stageName} ${Math.round(progress * 100)}%`,
+    "rgba(239, 245, 255, 0.96)"
+  );
+  drawLabel(ctx, 24 + leftWidth, topY, `Squishes ${stats.squishes}`, "rgba(218, 228, 245, 0.9)");
+
+  const rightText = stats.gachaTickets > 0 ? `Gacha ${stats.gachaTickets}` : "Gacha 0";
+  ctx.font = "600 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+  const rightWidth = Math.ceil(ctx.measureText(rightText).width) + 18;
+  drawLabel(ctx, width - rightWidth - 16, topY, rightText, "rgba(255, 233, 196, 0.96)", "rgba(255, 218, 153, 0.18)");
+
+  ctx.font = "600 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+  drawLabel(
+    ctx,
+    width - 16 - Math.ceil(ctx.measureText(`${stats.collectionCount}/${stats.collectionTotal}`).width) - 30,
+    height - 42,
+    `Collection ${stats.collectionCount}/${stats.collectionTotal}`,
+    "rgba(210, 224, 255, 0.92)",
+    "rgba(147, 180, 255, 0.16)"
+  );
+
+  if (stats.toastTime > 0 && stats.toastText) {
+    const toastWidth = Math.min(width - 32, Math.ceil(ctx.measureText(stats.toastText).width) + 24);
+    const toastX = (width - toastWidth) * 0.5;
+    const toastY = Math.max(44, height - 92);
+    ctx.save();
+    ctx.globalAlpha = clamp(stats.toastTime, 0, 1);
+    ctx.fillStyle = "rgba(6, 10, 16, 0.55)";
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(toastX, toastY, toastWidth, 28, 14);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(244, 248, 255, 0.96)";
+    ctx.font = "600 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+    ctx.fillText(stats.toastText, toastX + 12, toastY + 18);
+    ctx.restore();
+  }
 
   if (stats.flash > 0) {
-    ctx.fillStyle = `rgba(255, 255, 255, ${stats.flash * 0.08})`;
+    ctx.fillStyle = `rgba(255,255,255,${stats.flash * 0.07})`;
     ctx.fillRect(0, 0, width, height);
   }
 }

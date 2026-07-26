@@ -1,6 +1,8 @@
 # Tap & Squish
 
-A mobile-first soft-body canvas game built with Vite, TypeScript, and HTML5 Canvas.
+Touch. Squish. Smile. Repeat.
+
+Mobile-first soft-body canvas game built with Vite, TypeScript, and HTML5 Canvas.
 
 ## Run
 
@@ -15,13 +17,16 @@ npm run dev
 npm run build
 ```
 
-## Controls
+## Loop
 
-- Press, drag, or pinch the blob with the mouse or touch.
-- Multi-finger interaction is supported.
-- Build squish streaks to raise your combo and score.
+- Touch the blob.
+- Squish it to grow progress.
+- Watch it evolve from Dough to Bread to Cake to Squishy.
+- Finish a cycle to open gacha and grow the collection.
+- Start the next piece immediately.
 
 ## Notes
 
 - Physics uses Verlet integration, PBD constraints, pressure, volume preservation, and shape matching.
-- The blob is regenerated with new colors and proportions over time.
+- Multi-touch is supported.
+- Collection progress persists in local storage.

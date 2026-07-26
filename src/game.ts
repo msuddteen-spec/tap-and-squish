@@ -1,6 +1,7 @@
 import { InputManager } from "./input";
-import { clamp, lerp } from "./math";
+import { clamp } from "./math";
 import { renderFrame, type FrameStats } from "./render";
+import { EVOLUTION_STAGES, pickGachaItem } from "./progression";
 import { SquishyBlob } from "./simulation";
 
 class RNG {
@@ -18,30 +19,63 @@ class RNG {
   }
 }
 
+const STORAGE_KEY = "tapandsquish.collection.v1";
+
+function readCollection(): Set<string> {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return new Set();
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+    return new Set(parsed.filter((value): value is string => typeof value === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollection(collection: Set<string>): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...collection]));
+  } catch {
+    // Local storage can be unavailable in private contexts; the game still works without persistence.
+  }
+}
+
 export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly input: InputManager;
   private readonly rng: RNG;
 
+  private readonly pointerBuffer: PointerContact[] = [];
+  private readonly collection = readCollection();
+
   private blob: SquishyBlob;
   private width = 0;
   private height = 0;
+  private centerX = 0;
+  private centerY = 0;
   private dpr = 1;
   private raf = 0;
   private last = 0;
   private accumulator = 0;
   private readonly fixedStep = 1 / 120;
 
-  private score = 0;
+  private stageIndex = 0;
+  private stageProgress = 0;
   private squishes = 0;
-  private combo = 0;
-  private comboTime = 0;
-  private comboWindow = 0.95;
+  private gachaTickets = 0;
+  private pendingGachaOpen = false;
+  private toastText = "Touch. Squish. Smile. Repeat.";
+  private toastTime = 2.5;
   private flash = 0;
-  private highScore = 0;
-  private timeSinceSpawn = 0;
-  private roundSquisher = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
@@ -52,7 +86,7 @@ export class Game {
     this.ctx = ctx;
     this.rng = new RNG((Math.random() * 0xffffffff) >>> 0);
     this.input = new InputManager(canvas);
-    this.blob = new SquishyBlob(0, 0, () => this.rng.next());
+    this.blob = new SquishyBlob(0, 0, () => this.rng.next(), this.stageIndex);
     this.resize();
     this.bindResize();
   }
@@ -62,7 +96,7 @@ export class Game {
     const tick = (now: number): void => {
       const rawDt = clamp((now - this.last) / 1000, 0, 1 / 20);
       this.last = now;
-      this.update(rawDt, now);
+      this.update(rawDt);
       this.render();
       this.raf = window.requestAnimationFrame(tick);
     };
@@ -73,60 +107,51 @@ export class Game {
     window.cancelAnimationFrame(this.raf);
   }
 
-  private update(dt: number, now: number): void {
+  private update(dt: number): void {
     this.accumulator += dt;
-    this.timeSinceSpawn += dt;
-    if (this.comboTime > 0) {
-      this.comboTime = Math.max(0, this.comboTime - dt);
-      if (this.comboTime === 0) {
-        this.combo = 0;
-      }
-    }
-    this.flash = Math.max(0, this.flash - dt * 2.6);
+    this.toastTime = Math.max(0, this.toastTime - dt);
+    this.flash = Math.max(0, this.flash - dt * 2.4);
 
     while (this.accumulator >= this.fixedStep) {
-      const pointers: PointerSnapshot[] = [];
+      this.pointerBuffer.length = 0;
       for (const pointer of this.input.active.values()) {
-        pointers.push(pointer);
+        this.pointerBuffer.push(pointer);
       }
-      const metrics = this.blob.step(this.fixedStep, pointers, this.width, this.height);
-      for (const pointer of pointers) {
+
+      const metrics = this.blob.step(this.fixedStep, this.pointerBuffer, this.width, this.height);
+      for (let i = 0; i < this.pointerBuffer.length; i += 1) {
+        const pointer = this.pointerBuffer[i];
         pointer.peakCompression = Math.max(
           pointer.peakCompression,
           this.localCompression(pointer.x, pointer.y, metrics.compression)
         );
       }
-      this.roundSquisher = Math.max(this.roundSquisher, metrics.compression);
       this.accumulator -= this.fixedStep;
     }
 
-    for (const released of this.input.released) {
-      if (released.peakCompression > 0.14 || this.roundSquisher > 0.16) {
-        this.registerSquish(released.peakCompression > 0 ? released.peakCompression : this.roundSquisher);
-      }
-    }
-
     if (this.input.released.length > 0) {
-      this.input.clearReleased();
-      if (this.input.active.size === 0) {
-        this.roundSquisher = 0;
+      for (const released of this.input.released) {
+        this.handleSquish(released.peakCompression);
       }
+      this.input.clearReleased();
     }
 
-    if (this.timeSinceSpawn > 18 && this.blob.compression < 0.03) {
-      this.spawnBlob();
+    if (this.pendingGachaOpen && this.input.active.size === 0) {
+      this.openGacha();
     }
   }
 
   private render(): void {
     const stats: FrameStats = {
-      score: this.score,
+      stageName: EVOLUTION_STAGES[this.stageIndex].name,
+      stageProgress: this.stageProgress,
       squishes: this.squishes,
-      combo: this.combo,
-      comboTime: this.comboTime,
-      comboWindow: this.comboWindow,
-      flash: this.flash,
-      highScore: this.highScore
+      gachaTickets: this.gachaTickets,
+      collectionCount: this.collection.size,
+      collectionTotal: 10,
+      toastText: this.toastText,
+      toastTime: this.toastTime,
+      flash: this.flash
     };
     renderFrame(this.ctx, this.width, this.height, this.blob, stats);
   }
@@ -135,14 +160,14 @@ export class Game {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = Math.max(1, Math.floor(window.innerWidth));
     this.height = Math.max(1, Math.floor(window.innerHeight));
+    this.centerX = this.width * 0.5;
+    this.centerY = this.height * 0.56;
     this.canvas.width = Math.floor(this.width * this.dpr);
     this.canvas.height = Math.floor(this.height * this.dpr);
     this.canvas.style.width = `${this.width}px`;
     this.canvas.style.height = `${this.height}px`;
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    if (this.blob) {
-      this.blob.resetPosition(this.width * 0.5, this.height * 0.56);
-    }
+    this.blob.resetPosition(this.centerX, this.centerY);
   }
 
   private bindResize(): void {
@@ -150,26 +175,62 @@ export class Game {
     window.addEventListener("orientationchange", () => this.resize());
   }
 
-  private spawnBlob(): void {
-    this.blob.respawn(this.width * 0.5, this.height * 0.56, () => this.rng.next());
-    this.timeSinceSpawn = 0;
-    this.roundSquisher = 0;
-  }
-
-  private registerSquish(amount: number): void {
+  private handleSquish(amount: number): void {
     const quality = clamp(amount, 0.1, 1);
     this.squishes += 1;
-    this.combo = this.combo > 0 ? this.combo + 1 : 1;
-    this.comboTime = this.comboWindow;
-    const comboBonus = 1 + (this.combo - 1) * 0.35;
-    const points = Math.round(100 * quality * comboBonus);
-    this.score += points;
-    this.highScore = Math.max(this.highScore, this.score);
-    this.flash = Math.min(1, this.flash + 0.2 + quality * 0.15);
-    this.timeSinceSpawn = 0;
-    if (this.combo >= 4 && this.squishes % 3 === 0) {
-      this.spawnBlob();
+    this.flash = Math.min(1, this.flash + 0.14 + quality * 0.16);
+
+    const stageWeight = 0.2 + quality * 0.22;
+    this.stageProgress += stageWeight;
+
+    if (this.stageIndex < EVOLUTION_STAGES.length - 1 && this.stageProgress >= 1) {
+      this.stageProgress -= 1;
+      this.stageIndex += 1;
+      this.toastText = `${EVOLUTION_STAGES[this.stageIndex].name}`;
+      this.toastTime = 1.2;
+      this.rebuildBlob();
+      return;
     }
+
+    if (this.stageIndex === EVOLUTION_STAGES.length - 1 && this.stageProgress >= 1) {
+      this.stageProgress = 1;
+      if (!this.pendingGachaOpen) {
+        this.gachaTickets += 1;
+        this.pendingGachaOpen = true;
+        this.toastText = "Gacha ready";
+        this.toastTime = 1.2;
+      }
+    } else {
+      this.toastText = `${EVOLUTION_STAGES[this.stageIndex].name} ${Math.round(this.stageProgress * 100)}%`;
+      this.toastTime = 0.9;
+    }
+  }
+
+  private openGacha(): void {
+    if (this.gachaTickets <= 0 || !this.pendingGachaOpen) {
+      return;
+    }
+    this.gachaTickets -= 1;
+    this.pendingGachaOpen = false;
+
+    const item = pickGachaItem(() => this.rng.next(), this.collection);
+    const beforeSize = this.collection.size;
+    this.collection.add(item.id);
+    if (this.collection.size !== beforeSize) {
+      writeCollection(this.collection);
+    }
+
+    this.toastText = this.collection.size === beforeSize ? item.name : `${item.name} unlocked`;
+    this.toastTime = 1.5;
+    this.flash = 1;
+
+    this.stageIndex = 0;
+    this.stageProgress = 0;
+    this.rebuildBlob();
+  }
+
+  private rebuildBlob(): void {
+    this.blob.respawn(this.centerX, this.centerY, () => this.rng.next(), this.stageIndex);
   }
 
   private localCompression(x: number, y: number, globalCompression: number): number {
@@ -182,11 +243,11 @@ export class Game {
       return globalCompression * 0.25;
     }
     const falloff = 1 - dist / radius;
-    return clamp(globalCompression * (0.5 + falloff * 0.8), 0, 1);
+    return clamp(globalCompression * (0.45 + falloff * 0.85), 0, 1);
   }
 }
 
-type PointerSnapshot = {
+type PointerContact = {
   id: number;
   x: number;
   y: number;

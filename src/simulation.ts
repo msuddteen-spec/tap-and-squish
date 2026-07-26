@@ -1,5 +1,6 @@
 import { clamp, distance, fromAngle, lerp, normalize, polygonArea, polygonCentroid, rotate, smallestAngleDifference, smoothstep, wrap } from "./math";
 import type { PointerContact } from "./input";
+import { EVOLUTION_STAGES } from "./progression";
 
 interface BlobPoint {
   x: number;
@@ -95,6 +96,9 @@ export class SquishyBlob {
   homeY: number;
   readonly restOuterArea: number;
   readonly restInnerArea: number;
+  stageIndex: number;
+  softness: number;
+  pressureBoost: number;
 
   compression = 0;
   areaRatio = 1;
@@ -108,12 +112,15 @@ export class SquishyBlob {
   private readonly tempForces: { x: number; y: number }[] = [];
   private readonly shapeGoal = { cos: 1, sin: 0 };
 
-  constructor(x: number, y: number, rng: () => number) {
-    const generated = this.generateProfile(rng);
+  constructor(x: number, y: number, rng: () => number, stageIndex = 0) {
+    const generated = this.generateProfile(rng, stageIndex);
     this.palette = generated.palette;
     this.outerCount = generated.outerCount;
     this.innerCount = generated.innerCount;
     this.baseRadius = generated.baseRadius;
+    this.stageIndex = stageIndex;
+    this.softness = generated.softness;
+    this.pressureBoost = generated.pressureBoost;
     this.homeX = x;
     this.homeY = y;
 
@@ -186,12 +193,15 @@ export class SquishyBlob {
     }
   }
 
-  respawn(x: number, y: number, rng: () => number): void {
-    const generated = this.generateProfile(rng);
+  respawn(x: number, y: number, rng: () => number, stageIndex = this.stageIndex): void {
+    const generated = this.generateProfile(rng, stageIndex);
     this.palette = generated.palette;
     this.outerCount = generated.outerCount;
     this.innerCount = generated.innerCount;
     this.baseRadius = generated.baseRadius;
+    this.stageIndex = stageIndex;
+    this.softness = generated.softness;
+    this.pressureBoost = generated.pressureBoost;
     this.homeX = x;
     this.homeY = y;
     this.points.length = 0;
@@ -267,7 +277,7 @@ export class SquishyBlob {
       this.applyPointer(pointers[i]);
     }
 
-    integrate(this.points, fixedDt, 0.965);
+    integrate(this.points, fixedDt, clamp(0.952 + this.softness * 0.012, 0.95, 0.97));
 
     const substeps = 7;
     for (let iteration = 0; iteration < substeps; iteration += 1) {
@@ -300,22 +310,25 @@ export class SquishyBlob {
     };
   }
 
-  private generateProfile(rng: () => number): {
+  private generateProfile(rng: () => number, stageIndex: number): {
     outerCount: number;
     innerCount: number;
     baseRadius: number;
     palette: BlobPalette;
+    softness: number;
+    pressureBoost: number;
   } {
+    const stage = EVOLUTION_STAGES[stageIndex];
     const outerCount = 24 + Math.floor(rng() * 8) * 2;
     const innerCount = outerCount / 2;
-    const baseRadius = 78 + rng() * 34;
-    const hue = Math.floor(rng() * 360);
+    const baseRadius = (78 + rng() * 34) * stage.radiusScale;
+    const hue = (stage.hue + Math.floor((rng() - 0.5) * stage.hueSpread)) % 360;
     const palette: BlobPalette = {
-      base: `hsl(${hue} 82% 64%)`,
-      deep: `hsl(${(hue + 18) % 360} 74% 48%)`,
-      light: `hsl(${(hue + 10) % 360} 100% 82%)`,
-      glow: `hsla(${(hue + 6) % 360} 100% 70% / 0.3)`,
-      accent: `hsl(${(hue + 210) % 360} 76% 60%)`
+      base: `hsl(${(hue + 360) % 360} 82% 64%)`,
+      deep: `hsl(${(hue + 18 + 360) % 360} 74% 48%)`,
+      light: `hsl(${(hue + 10 + 360) % 360} 100% 84%)`,
+      glow: `hsla(${(hue + 6 + 360) % 360} 100% 70% / 0.3)`,
+      accent: `hsl(${(hue + 210 + 360) % 360} 76% 60%)`
     };
 
     this.restOuter.length = 0;
@@ -333,7 +346,7 @@ export class SquishyBlob {
       this.restInner.push(fromAngle(angle, radius));
     }
 
-    return { outerCount, innerCount, baseRadius, palette };
+    return { outerCount, innerCount, baseRadius, palette, softness: stage.softness, pressureBoost: stage.pressureBoost };
   }
 
   private buildConstraints(): void {
@@ -427,8 +440,9 @@ export class SquishyBlob {
       const angleDelta = Math.abs(smallestAngleDifference(localAngle, pointerAngle));
       const angularWeight = clamp(1 - angleDelta / (Math.PI * 0.95), 0, 1);
       const influence = falloff * angularWeight;
-      const inward = pull * influence;
-      const outward = bulge * influence * 0.6;
+      const softnessPush = 0.88 + this.softness * 0.18;
+      const inward = pull * influence * softnessPush;
+      const outward = bulge * influence * (0.5 + this.softness * 0.12);
       const toCenterX = center.x - point.x;
       const toCenterY = center.y - point.y;
       const toPointerX = pointerX - point.x;
@@ -474,7 +488,7 @@ export class SquishyBlob {
       if (len <= 1e-8) {
         continue;
       }
-      const factor = push * (1 + point.ring * 0.08);
+      const factor = push * (1 + point.ring * 0.08) * this.softness;
       point.x += (dx / len) * factor * len * 0.35;
       point.y += (dy / len) * factor * len * 0.35;
     }
@@ -549,7 +563,7 @@ export class SquishyBlob {
     }
     const outerArea = Math.abs(polygonArea(outer));
     const compression = this.restOuterArea > 0 ? clamp(1 - outerArea / this.restOuterArea, 0, 1) : 0;
-    const pressure = compression * (1.1 + dt * 0.2);
+    const pressure = compression * (1.1 + dt * 0.2) * this.pressureBoost;
     if (pressure <= 0) {
       return;
     }
