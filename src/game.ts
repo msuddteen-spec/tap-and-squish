@@ -108,18 +108,20 @@ export class Game {
   }
 
   private update(dt: number): void {
-    this.accumulator += dt;
+    // Keep the fixed-step loop bounded after tab switching or a burst of input.
+    this.accumulator = Math.min(this.accumulator + dt, this.fixedStep * 8);
     this.toastTime = Math.max(0, this.toastTime - dt);
     this.flash = Math.max(0, this.flash - dt * 2.4);
 
     if (this.input.pressed.length > 0) {
       for (const pressed of this.input.pressed) {
-        this.handleSquish(this.pressImpulse(pressed));
+        this.showPressFeedback(this.pressImpulse(pressed));
       }
       this.input.clearPressed();
     }
 
-    while (this.accumulator >= this.fixedStep) {
+    let stepCount = 0;
+    while (this.accumulator >= this.fixedStep && stepCount < 8) {
       this.pointerBuffer.length = 0;
       for (const pointer of this.input.active.values()) {
         this.pointerBuffer.push(pointer);
@@ -134,6 +136,10 @@ export class Game {
         );
       }
       this.accumulator -= this.fixedStep;
+      stepCount += 1;
+    }
+    if (stepCount === 8) {
+      this.accumulator = 0;
     }
 
     if (this.input.released.length > 0) {
@@ -183,7 +189,7 @@ export class Game {
   }
 
   private handleSquish(amount: number): void {
-    const quality = clamp(amount, 0.1, 1);
+    const quality = clamp(amount, 0.34, 1);
     this.squishes += 1;
     this.flash = Math.min(1, this.flash + 0.14 + quality * 0.16);
 
@@ -214,6 +220,12 @@ export class Game {
       this.toastText = `${EVOLUTION_STAGES[this.stageIndex].name} ${Math.min(100, Math.round(this.stageProgress * 100))}%`;
       this.toastTime = 0.9;
     }
+  }
+
+  private showPressFeedback(amount: number): void {
+    this.flash = Math.min(1, this.flash + 0.08 + amount * 0.08);
+    this.toastText = "Squish!";
+    this.toastTime = 0.45;
   }
 
   private openGacha(): void {

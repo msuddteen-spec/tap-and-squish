@@ -37,8 +37,8 @@ export class InputManager {
     const toLocal = (event: PointerEvent): { x: number; y: number } => {
       const rect = this.canvas.getBoundingClientRect();
       return {
-        x: (event.clientX - rect.left) * (this.canvas.width / rect.width),
-        y: (event.clientY - rect.top) * (this.canvas.height / rect.height)
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
       };
     };
 
@@ -52,7 +52,9 @@ export class InputManager {
         prevX: local.x,
         prevY: local.y,
         pressure: event.pressure > 0 ? event.pressure : 0.5,
-        peakCompression: 0
+        // A very quick tap can begin and end between two physics frames.
+        // Start with a small guaranteed squish so it still advances gameplay.
+        peakCompression: 0.34
       };
       this.active.set(event.pointerId, contact);
       this.pressed.push({ ...contact });

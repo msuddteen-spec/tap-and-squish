@@ -41,6 +41,24 @@ function drawSpline(ctx: CanvasRenderingContext2D, points: readonly SplinePoint[
   }
 }
 
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  const r = Math.min(radius, width * 0.5, height * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
 function drawLabel(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -55,8 +73,7 @@ function drawLabel(
   ctx.fillStyle = "rgba(6, 10, 16, 0.44)";
   ctx.strokeStyle = stroke;
   ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, 24, 12);
+  roundedRectPath(ctx, x, y, width, 24, 12);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = fill;
@@ -196,8 +213,7 @@ export function renderFrame(
     ctx.fillStyle = "rgba(6, 10, 16, 0.55)";
     ctx.strokeStyle = "rgba(255,255,255,0.1)";
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(toastX, toastY, toastWidth, 28, 14);
+    roundedRectPath(ctx, toastX, toastY, toastWidth, 28, 14);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "rgba(244, 248, 255, 0.96)";
