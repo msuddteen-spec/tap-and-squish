@@ -1,0 +1,11 @@
+node_modules
+dist
+.npm-cache
+.DS_Store
+*.log
+*.tsbuildinfo
+.vite
+outputs/*
+!outputs/.gitkeep
+work/*
+!work/.gitkeep
