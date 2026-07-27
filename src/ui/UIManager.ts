@@ -44,8 +44,30 @@ export class UIManager {
   private floatText(text: string,x: number,y: number,className: string): void { if (this.floatingCount >= 8) return; this.floatingCount++; const element = document.createElement('span'); element.className = 'floating-text ' + className; element.textContent = text; element.style.left = x + 'px'; element.style.top = y + 'px'; this.root.appendChild(element); window.setTimeout(() => { element.remove(); this.floatingCount--; },850); }
   private rankTitle(score: number): string { return this.language.rankTitle(score); }
   private multiplier(combo: number): number { return combo >= 40 ? 10 : combo >= 20 ? 5 : combo >= 10 ? 3 : combo >= 5 ? 2 : 1; }
-  private applyLanguage(): void { const t = this.language.t; document.documentElement.lang = this.language.code; const set = (selector: string, value: string) => { const element = this.root.querySelector<HTMLElement>(selector); if (element) element.textContent = value; }; set('.stats div:nth-child(1) small', t.score.toUpperCase()); set('.stats div:nth-child(2) small', t.combo.toUpperCase()); set('.stats div:nth-child(3) small', t.coins.toUpperCase()); set('.status', '● ' + t.ready); set('.hint span:nth-child(2)', t.touch + ' | ' + t.soft); set('#language-label-text', t.language); set('#settings-title', t.settings); this.root.querySelectorAll<HTMLElement>('.bottom-nav button span').forEach((item, index) => { item.textContent = [t.play, t.mission, t.leaderboard, t.settings][index] ?? item.textContent; }); const select = this.refs['language-select'] as HTMLSelectElement | undefined; if (select) select.value = this.language.code; }
-  private setText(id: string,value: string): void { if (this.refs[id]) this.refs[id].textContent = value; }
+  private applyLanguage(): void {
+    const t = this.language.t;
+    document.documentElement.lang = this.language.code;
+    const set = (selector: string, value: string) => { const element = this.root.querySelector<HTMLElement>(selector); if (element) element.textContent = value; };
+    const setLabel = (selector: string, value: string) => { const element = this.root.querySelector<HTMLElement>(selector); if (element?.firstChild) element.firstChild.textContent = value + ' '; };
+    set('.stats div:nth-child(1) small', t.score.toUpperCase());
+    set('.stats div:nth-child(2) small', t.combo.toUpperCase());
+    set('.stats div:nth-child(3) small', t.coins.toUpperCase());
+    set('.status', '● ' + t.ready);
+    set('.hint span:nth-child(2)', t.touch + ' | ' + t.soft);
+    set('#language-label-text', t.language);
+    set('#settings-title', t.settings);
+    setLabel('.setting-row:nth-of-type(2)', t.sound);
+    setLabel('.setting-row:nth-of-type(3)', t.haptic);
+    setLabel('.setting-row:nth-of-type(4)', t.reduce);
+    set('#change-country', t.changeCountry);
+    set('#share-score', t.share);
+    set('#install-button', t.install);
+    set('#reset-button', t.reset);
+    set('#claim-button', t.claim);
+    this.root.querySelectorAll<HTMLElement>('.bottom-nav button span').forEach((item, index) => { item.textContent = [t.play, t.mission, t.leaderboard, t.settings][index] ?? item.textContent; });
+    const select = this.refs['language-select'] as HTMLSelectElement | undefined;
+    if (select) select.value = this.language.code;
+  }  private setText(id: string,value: string): void { if (this.refs[id]) this.refs[id].textContent = value; }
   private on(selector: string,type: string,handler: EventListener): void { const element = this.root.querySelector(selector); if (element) this.listen(element,type,handler); }
   private listen(element: EventTarget,type: string,handler: EventListener): void { element.addEventListener(type,handler); this.cleanup.push(() => element.removeEventListener(type,handler)); }
 }
