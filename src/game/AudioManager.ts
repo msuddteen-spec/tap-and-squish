@@ -18,9 +18,8 @@ export class AudioManager {
   get isMuted(): boolean { return this.muted; }
   setMuted(value: boolean): void { this.muted = value; localStorage.setItem(MUTE_KEY, String(value)); }
   unlock(): void {
-    if (this.unlocked) return;
+    // Mobile browsers unlock audio from the real press; avoid starting all clips at once.
     this.unlocked = true;
-    for (const audio of this.sounds) { audio.muted = true; void audio.play().then(() => { audio.pause(); audio.currentTime = 0; audio.muted = this.muted; }).catch(() => undefined); }
   }
   playSquish(): void {
     this.unlock();
