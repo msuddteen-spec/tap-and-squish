@@ -1,0 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Nunito:wght@700;800;900&display=swap');
+
+:root { font-family: 'DM Sans', 'Noto Sans Thai', sans-serif; color: #663b27; background: #fff7ed; }
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { touch-action: none; user-select: none; -webkit-user-select: none; }
+.game-canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+.hud { position: fixed; inset: 0; z-index: 1; padding: max(28px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+.topbar { display: flex; justify-content: space-between; align-items: flex-start; }
+.eyebrow { margin: 0 0 4px; color: #d99a5b; font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+h1 { margin: 0; font-family: Nunito, sans-serif; font-size: clamp(42px, 13vw, 64px); line-height: .82; letter-spacing: -.07em; color: #633825; }
+h1 span { color: #db8e45; }
+.counter { min-width: 66px; padding: 10px 13px 9px; border-radius: 18px; background: rgba(255,255,255,.64); text-align: center; box-shadow: 0 7px 22px rgba(157,96,45,.08); }
+.counter span { display: block; font-family: Nunito, sans-serif; font-size: 27px; font-weight: 900; line-height: 1; color: #cf7b35; }
+.counter small { font-size: 10px; color: #b58a69; }
+.hint { align-self: center; display: flex; align-items: center; gap: 10px; margin-top: 150px; color: #b28b6e; font-size: 13px; line-height: 1.5; text-align: left; transform: translateY(90px); }
+.hint b { color: #cf8750; font-weight: 700; }
+.hand { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #e9cbaa; border-radius: 50%; color: #e1a363; font-size: 18px; }
+footer { align-self: center; display: flex; align-items: center; gap: 7px; color: #c49a79; font-size: 11px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #89bd76; box-shadow: 0 0 0 4px rgba(137,189,118,.16); }
+@media (min-width: 600px) { .hud { max-width: 430px; margin: auto; } }
