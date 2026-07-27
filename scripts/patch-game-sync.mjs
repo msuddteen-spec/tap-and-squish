@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+const file = 'src/game/GameManager.ts';
+let source = fs.readFileSync(file, 'utf8');
+source = source.replace("import type { PressResult, SaveState } from '../types/game';", "import type { PressResult, SaveState } from '../types/game';\nimport { ScoreSyncManager } from './ScoreSyncManager';");
+source = source.replace('  private coinsProgress = 0;', '  readonly sync: ScoreSyncManager;');
+source = source.replace('constructor() { this.save = new SaveManager(); this.audio = new AudioManager(); }', 'constructor() { this.save = new SaveManager(); this.audio = new AudioManager(); this.sync = new ScoreSyncManager(this); }');
+source = source.replace('    this.coinsProgress += scoreAdded;\n    const coinsAdded = Math.floor(this.coinsProgress / 10);\n    this.coinsProgress %= 10;', '    const coinsAdded = Math.floor(nextScore / 10) - Math.floor(previousScore / 10);');
+source = source.replace('this.save.update({ score: nextScore, highScore: Math.max(this.state.highScore, nextScore), coins: this.state.coins + coinsAdded, totalPresses: this.state.totalPresses + 1, dailyPresses });', 'this.save.update({ score: nextScore, highScore: Math.max(this.state.highScore, nextScore), coins: this.state.coins + coinsAdded, totalPresses: this.state.totalPresses + 1, dailyPresses, bestCombo: Math.max(this.state.bestCombo, this.combo) });\n    this.sync.request();');
+source = source.replace('dispose(): void { this.save.dispose(); }', 'dispose(): void { this.sync.dispose(); this.save.dispose(); }');
+fs.writeFileSync(file, source);

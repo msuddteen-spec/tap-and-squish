@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+const uiFile = 'src/ui/UIManager.ts'; let ui = fs.readFileSync(uiFile, 'utf8');
+ui = ui.replace('<div class="rank-strip glass"><span id="player-rank">Player Rank —</span><span id="country-rank">Country Rank —</span></div>', '');
+ui = ui.replace("'country-summary','player-rank','country-rank','mission-panel'", "'country-summary','mission-panel'");
+ui = ui.replace(" this.setText('player-rank','Player Rank ' + (this.refs['player-rank']?.dataset.rank ?? '—')); this.setText('country-rank','Country Rank ' + (this.refs['country-rank']?.dataset.rank ?? '—'));", '');
+ui = ui.replace(" if (response.playerRank) { this.refs['player-rank'].dataset.rank = String(response.playerRank); }", '');
+ui = ui.replace(" if (response.playerRank) this.refs['country-rank'].dataset.rank = String(response.playerRank);", '');
+fs.writeFileSync(uiFile, ui);
+const serviceFile = 'src/lib/CountryRankingService.ts'; let service = fs.readFileSync(serviceFile, 'utf8');
+service = service.replace("const mockPlayers: PlayerLeaderboardEntry[] = [{ rank: 1, id: 'mock-1', username: 'BreadKing', countryCode: 'TH', score: 52310, bestCombo: 42 }, { rank: 2, id: 'mock-2', username: 'MochiMaster', countryCode: 'JP', score: 47880, bestCombo: 39 }, { rank: 3, id: 'mock-3', username: 'SoftBun', countryCode: 'SG', score: 42950, bestCombo: 33 }, { rank: 4, id: 'mock-4', username: 'ToastBoss', countryCode: 'US', score: 39420, bestCombo: 28 }, { rank: 5, id: 'mock-5', username: 'JellyBread', countryCode: 'KR', score: 35870, bestCombo: 25 }];", "const mockPlayers: PlayerLeaderboardEntry[] = [];");
+service = service.replace("const mockCountries: CountryLeaderboardEntry[] = [{ rank: 1, countryCode: 'TH', totalScore: 114200, playerCount: 184 }, { rank: 2, countryCode: 'JP', totalScore: 98300, playerCount: 146 }, { rank: 3, countryCode: 'US', totalScore: 92100, playerCount: 129 }, { rank: 4, countryCode: 'SG', totalScore: 68400, playerCount: 73 }, { rank: 5, countryCode: 'KR', totalScore: 55200, playerCount: 67 }];", "const mockCountries: CountryLeaderboardEntry[] = [];");
+service = service.replace("username: current?.username || 'You', countryCode: current?.countryCode || 'TH', score: current?.score || 0, bestCombo: current?.bestCombo || 0", "username: current?.username || 'You', countryCode: current?.countryCode || 'TH', score: current?.score || 0, bestCombo: current?.bestCombo || 0");
+service = service.replace("playerRank: 6, updatedAt", "playerRank: 1, updatedAt");
+service = service.replace("const own = mockCountries.find((entry) => entry.countryCode === currentCode); const entries = own ? mockCountries : [...mockCountries, { rank: mockCountries.length + 1, countryCode: currentCode || 'TH', totalScore: currentScore, playerCount: 1 }];", "const entries = [{ rank: 1, countryCode: currentCode || 'TH', totalScore: currentScore, playerCount: 1 }];");
+fs.writeFileSync(serviceFile, service);
